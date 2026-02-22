@@ -173,14 +173,21 @@ async function loadPdfDocument(data) {
 
         console.log(`Dokumen dimuat: ${totalPages} halaman.`);
 
+        // Dapatkan dimensi halaman pertama untuk konfigurasi aspect ratio
+        const page1 = await pdfDoc.getPage(1);
+        const viewport = page1.getViewport({ scale: 1 });
+        const pdfWidth = viewport.width;
+        const pdfHeight = viewport.height;
+        console.log(`Dimensi PDF Asli: ${pdfWidth}x${pdfHeight}`);
+
         // Render Daftar Isi (TOC) jika ada
         await renderTOC();
 
         // Render Semua Halaman ke Canvas
         await renderPages();
 
-        // Inisialisasi Flipbook
-        initFlipbook();
+        // Inisialisasi Flipbook dengan dimensi yang sesuai
+        initFlipbook(pdfWidth, pdfHeight);
 
     } catch (error) {
         console.error("Error saat memuat dokumen PDF:", error);
@@ -259,7 +266,7 @@ async function renderPages() {
         // Buat container div untuk halaman (diperlukan oleh StPageFlip)
         const pageDiv = document.createElement('div');
         pageDiv.classList.add('page');
-        // pageDiv.style.backgroundColor = 'white'; // Pastikan background putih
+        // pageDiv.style.backgroundColor = 'white'; // Ditangani di CSS
 
         // Buat elemen Canvas
         const canvas = document.createElement('canvas');
@@ -297,9 +304,8 @@ async function renderPages() {
 /**
  * Menginisialisasi StPageFlip dengan halaman yang sudah dirender
  */
-function initFlipbook() {
-    // Pastikan kita menggunakan PageFlip (nama global dari CDN page-flip.browser.js biasanya 'PageFlip')
-    // Cek objek global yang tersedia. Biasanya `PageFlip` atau `St.PageFlip`
+function initFlipbook(width, height) {
+    // Pastikan kita menggunakan PageFlip
     let PageFlipClass = window.PageFlip;
     if (!PageFlipClass && window.St && window.St.PageFlip) {
         PageFlipClass = window.St.PageFlip;
@@ -313,15 +319,28 @@ function initFlipbook() {
 
     const flipbookElement = document.getElementById('flipbook');
 
+    // Pastikan container bersih dari instance sebelumnya jika ada
+    if (pageFlip) {
+        // Idealnya destroy instance lama jika mendukung
+        try {
+           pageFlip.destroy();
+        } catch(e) {
+           console.log("Gagal destroy pageFlip lama", e);
+        }
+        pageFlip = null;
+    }
+
     // Konfigurasi StPageFlip
     pageFlip = new PageFlipClass(flipbookElement, {
-        width: 500, // Lebar dasar (bisa disesuaikan)
-        height: 700, // Tinggi dasar
+        width: width, // Gunakan lebar asli PDF
+        height: height, // Gunakan tinggi asli PDF
         size: 'stretch', // Sesuaikan dengan container induk
-        minWidth: 300,
-        maxWidth: 2000,
-        minHeight: 400,
-        maxHeight: 2000,
+        // Atur batasan scaling agar rasio tetap terjaga
+        minWidth: 200,
+        maxWidth: 3000,
+        minHeight: 200 * (height / width),
+        maxHeight: 3000 * (height / width),
+
         showCover: true, // Halaman pertama adalah cover
         usePortrait: true, // Otomatis 1 halaman di layar sempit (Portrait)
         maxShadowOpacity: 0.5, // Opasitas bayangan lipatan
@@ -355,7 +374,7 @@ function initFlipbook() {
         }, 500);
     }
 
-    console.log("Flipbook berhasil diinisialisasi.");
+    console.log("Flipbook berhasil diinisialisasi dengan dimensi:", width, "x", height);
 }
 
 // --- Fitur Pencarian ---
@@ -364,50 +383,66 @@ function initFlipbook() {
  * Mencari teks di seluruh halaman PDF
  */
 async function handleSearch() {
-    const keyword = searchInput.value.trim().toLowerCase();
-    if (!keyword) return;
+    const keywordRaw = searchInput.value.trim();
+    if (!keywordRaw) return;
 
-    // Tampilkan indikator loading (opsional)
+    const keyword = keywordRaw.toLowerCase();
+
+    // Tampilkan indikator loading
     const originalBtnText = searchBtn.textContent;
-    searchBtn.textContent = '...';
     searchBtn.disabled = true;
 
     try {
         let found = false;
-        // Mulai pencarian dari halaman setelahnya sampai akhir, lalu dari awal sampai halaman ini
-        // Agar pencarian bersifat "Next"
 
         // Urutan pencarian: (current+1 -> total) lalu (1 -> current)
         const searchOrder = [];
         for (let i = currentPageNum + 1; i <= totalPages; i++) searchOrder.push(i);
         for (let i = 1; i <= currentPageNum; i++) searchOrder.push(i);
 
+        // Loop pencarian
         for (const pageNum of searchOrder) {
+            // Update UI agar user tahu proses sedang berjalan
+            searchBtn.textContent = `${pageNum}`;
+
+            // Beri jeda sedikit agar UI thread tidak freeze
+            await new Promise(r => setTimeout(r, 0));
+
             const page = await pdfDoc.getPage(pageNum);
             const textContent = await page.getTextContent();
 
-            // Gabungkan semua item teks di halaman
-            const pageText = textContent.items.map(item => item.str).join(' ').toLowerCase();
+            // Strategi Ekstraksi Teks:
+            // 1. Gabung dengan spasi (normal)
+            // 2. Gabung tanpa spasi (untuk mengatasi fragmentasi kata di PDF)
+            const items = textContent.items.map(item => item.str);
+            const textSpaced = items.join(' ').toLowerCase();
+            const textJoined = items.join('').toLowerCase();
 
-            if (pageText.includes(keyword)) {
+            // Cek apakah keyword ada di salah satu versi
+            if (textSpaced.includes(keyword) || textJoined.includes(keyword)) {
                 // Ketemu!
-                console.log(`Kata kunci ditemukan di halaman ${pageNum}`);
+                console.log(`Kata kunci "${keyword}" ditemukan di halaman ${pageNum}`);
+
                 if (pageFlip) {
                     pageFlip.flip(pageNum - 1); // Flip ke halaman tersebut
                 }
                 found = true;
-                break; // Berhenti mencari
+                break; // Berhenti mencari setelah ketemu yang pertama (Next)
             }
         }
 
         if (!found) {
-            alert(`Kata "${keyword}" tidak ditemukan.`);
+            alert(`Kata "${keywordRaw}" tidak ditemukan.`);
         }
 
     } catch (error) {
         console.error("Error saat mencari:", error);
+        alert("Terjadi kesalahan saat mencari.");
     } finally {
+        // Kembalikan tombol ke keadaan semula
         searchBtn.textContent = originalBtnText;
         searchBtn.disabled = false;
+        // Fokus kembali ke input agar bisa tekan Enter lagi untuk 'Find Next'
+        searchInput.focus();
     }
 }

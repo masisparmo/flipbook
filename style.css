@@ -152,6 +152,13 @@ body, html {
     overflow: hidden;
 }
 
+/* Page Styling - Updated */
+.page {
+    background-color: white; /* Prevent transparency */
+    /* box-shadow: 0 0 5px rgba(0,0,0,0.1); */ /* Optional: StPageFlip adds its own shadow, but this ensures a base */
+    overflow: hidden;
+}
+
 /* Modal Daftar Isi (TOC) */
 .toc-modal {
     position: fixed;
