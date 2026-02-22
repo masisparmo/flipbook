@@ -1,0 +1,231 @@
+/* Reset Dasar */
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    background-color: #f4f4f4;
+    overflow: hidden; /* Hindari scrollbar browser, flipbook akan handle sendiri */
+}
+
+/* Container Umum */
+.upload-container, .viewer-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Tampilan Awal: Upload Box */
+.upload-box {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
+
+.upload-box h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.upload-box p {
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.btn-upload, .btn-url {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.3s;
+    display: inline-block;
+    margin-bottom: 1rem;
+    text-decoration: none;
+}
+
+.btn-upload:hover, .btn-url:hover {
+    background-color: #0056b3;
+}
+
+.input-group {
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#url-input {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+/* Tampilan Flipbook (Viewer) */
+.viewer-container {
+    flex-direction: column;
+    background-color: #333; /* Background gelap untuk fokus membaca */
+    position: relative;
+}
+
+.toolbar {
+    background-color: #222;
+    color: white;
+    width: 100%;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    flex-wrap: wrap; /* Agar responsif di layar kecil */
+}
+
+.toolbar button {
+    background: none;
+    border: 1px solid #555;
+    color: white;
+    padding: 5px 10px;
+    margin: 0 5px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.toolbar button:hover {
+    background-color: #444;
+}
+
+#page-info {
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+}
+
+#page-input {
+    width: 50px;
+    text-align: center;
+    margin: 0 5px;
+    padding: 3px;
+    background: #333;
+    color: white;
+    border: 1px solid #555;
+}
+
+.search-box {
+    display: flex;
+    align-items: center;
+}
+
+#search-input {
+    padding: 5px;
+    border-radius: 4px 0 0 4px;
+    border: 1px solid #555;
+    background: #444;
+    color: white;
+    width: 120px;
+}
+
+#search-btn {
+    border-radius: 0 4px 4px 0;
+    border-left: none;
+}
+
+/* Area Flipbook */
+.flipbook {
+    width: 100%;
+    height: calc(100% - 60px); /* Kurangi tinggi toolbar */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Modal Daftar Isi (TOC) */
+.toc-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    justify-content: flex-start; /* Sidebar style */
+    z-index: 200;
+}
+
+.toc-content {
+    background: white;
+    width: 300px;
+    height: 100%;
+    padding: 20px;
+    overflow-y: auto;
+    position: relative;
+    transform: translateX(-100%); /* Animasi slide-in */
+    transition: transform 0.3s ease-out;
+}
+
+.toc-modal.active .toc-content {
+    transform: translateX(0);
+}
+
+.close-toc {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.toc-content ul {
+    list-style: none;
+    padding: 0;
+}
+
+.toc-content li {
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+
+.toc-content li:hover {
+    background-color: #f9f9f9;
+    color: #007bff;
+}
+
+/* Helper Classes */
+.hidden {
+    display: none !important;
+}
+
+/* Media Queries untuk Responsivitas */
+@media (max-width: 768px) {
+    .toolbar {
+        justify-content: center;
+    }
+
+    .toolbar button, #page-info, .search-box {
+        margin: 5px;
+        font-size: 0.8rem;
+    }
+
+    #search-input {
+        width: 80px;
+    }
+
+    /* Di Mobile, TOC mungkin butuh lebar penuh */
+    .toc-content {
+        width: 80%;
+    }
+}
