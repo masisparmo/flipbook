@@ -274,6 +274,7 @@ function updatePageScale(pageElement) {
 
     if (clientWidth === 0 || clientHeight === 0) return;
 
+    // Use containment logic (similar to object-fit: contain)
     const scaleX = clientWidth / viewportWidth;
     const scaleY = clientHeight / viewportHeight;
     const scale = Math.min(scaleX, scaleY);
@@ -300,6 +301,7 @@ async function renderPages() {
         // Buat container div untuk halaman (diperlukan oleh StPageFlip)
         const pageDiv = document.createElement('div');
         pageDiv.classList.add('page');
+        pageDiv.setAttribute('data-page-index', i - 1); // Store 0-based index
         // pageDiv.style.backgroundColor = 'white'; // Ditangani di CSS
 
         // Buat elemen Canvas
@@ -349,7 +351,6 @@ async function renderPages() {
         await page.render(renderContext).promise;
 
         // Render Text Layer (async but waited here to ensure order)
-        // Note: We could run this in parallel but let's keep it simple
         try {
             const textContent = await page.getTextContent();
             await pdfjsLib.renderTextLayer({
@@ -431,14 +432,11 @@ function initFlipbook(width, height) {
 
         // Handle pending search highlight
         if (pendingSearchKeyword) {
+            // Apply highlight after a delay to ensure page is visible
             setTimeout(() => {
-                if (window.find) {
-                    // Reset selection to ensure we find from the top of the visible page
-                    window.getSelection().removeAllRanges();
-                    window.find(pendingSearchKeyword);
-                }
+                performSearchHighlight(pendingSearchKeyword, newPageIndex);
                 pendingSearchKeyword = null;
-            }, 600); // Tunggu animasi flip selesai
+            }, 500); // Tunggu animasi flip selesai
         }
     });
 
@@ -457,6 +455,64 @@ function initFlipbook(width, height) {
 
 // --- Fitur Pencarian ---
 
+function clearHighlights() {
+    const highlights = document.querySelectorAll('.textLayer .highlighted');
+    highlights.forEach(el => el.classList.remove('highlighted'));
+}
+
+/**
+ * Highlights text on a specific page
+ * @param {string} keyword
+ * @param {number} pageIndex 0-based index
+ */
+function performSearchHighlight(keyword, pageIndex) {
+    if (!keyword) return;
+
+    // Find the page element
+    // StPageFlip might move elements, so we look for our marker attribute
+    const pages = document.querySelectorAll('.page');
+    let targetPage = null;
+    for (const p of pages) {
+        if (parseInt(p.getAttribute('data-page-index')) === pageIndex) {
+            targetPage = p;
+            break;
+        }
+    }
+
+    if (!targetPage) return;
+
+    const textLayer = targetPage.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const spans = textLayer.querySelectorAll('span');
+    let foundInSpans = false;
+
+    // Remove old highlights on this page
+    spans.forEach(span => span.classList.remove('highlighted'));
+
+    // Simple span-based matching
+    spans.forEach(span => {
+        if (span.textContent.toLowerCase().includes(keyword)) {
+            span.classList.add('highlighted');
+            foundInSpans = true;
+        }
+    });
+
+    // Fallback: Browser native find/select
+    // This is useful for "Find Next" functionality or if spans are fragmented
+    if (window.find) {
+        // We try to focus the window and find
+        // Note: window.find is global, so it might jump. But we just flipped to the page.
+        try {
+            window.getSelection().removeAllRanges();
+            window.find(keyword, false, false, true, false, true, false);
+        } catch (e) {
+            console.log("Window find failed", e);
+        }
+    }
+}
+
+
 /**
  * Mencari teks di seluruh halaman PDF
  */
@@ -465,6 +521,9 @@ async function handleSearch() {
     if (!keywordRaw) return;
 
     const keyword = keywordRaw.toLowerCase();
+
+    // Clear previous visual highlights globally
+    clearHighlights();
 
     // Tampilkan indikator loading
     const originalBtnText = searchBtn.textContent;
@@ -490,28 +549,27 @@ async function handleSearch() {
             const textContent = await page.getTextContent();
 
             // Strategi Ekstraksi Teks:
-            // 1. Gabung dengan spasi (normal)
-            // 2. Gabung tanpa spasi (untuk mengatasi fragmentasi kata di PDF)
             const items = textContent.items.map(item => item.str);
             const textSpaced = items.join(' ').toLowerCase();
             const textJoined = items.join('').toLowerCase();
 
-            // Cek apakah keyword ada di salah satu versi
+            // Cek apakah keyword ada
             if (textSpaced.includes(keyword) || textJoined.includes(keyword)) {
                 // Ketemu!
                 console.log(`Kata kunci "${keyword}" ditemukan di halaman ${pageNum}`);
 
                 if (pageFlip) {
                     const targetIndex = pageNum - 1;
+
+                    // Set pending keyword so event listener handles the highlight after animation
+                    pendingSearchKeyword = keyword;
+
                     if (pageFlip.getCurrentPageIndex() === targetIndex) {
-                        // Jika sudah di halaman tersebut, highlight langsung
-                        if (window.find) {
-                             window.getSelection().removeAllRanges();
-                             window.find(keyword);
-                        }
+                        // Jika sudah di halaman tersebut, trigger manual
+                        performSearchHighlight(keyword, targetIndex);
+                        pendingSearchKeyword = null; // Clear because we handled it
                     } else {
-                        // Jika perlu flip, set pending keyword untuk dihandle event listener
-                        pendingSearchKeyword = keyword;
+                        // Flip and let event listener handle it
                         pageFlip.flip(targetIndex);
                     }
                 }
@@ -531,7 +589,7 @@ async function handleSearch() {
         // Kembalikan tombol ke keadaan semula
         searchBtn.textContent = originalBtnText;
         searchBtn.disabled = false;
-        // Fokus kembali ke input agar bisa tekan Enter lagi untuk 'Find Next'
+        // Fokus kembali ke input
         searchInput.focus();
     }
 }
