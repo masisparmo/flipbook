@@ -334,6 +334,18 @@ async function renderPages() {
         textLayerDiv.setAttribute('data-viewport-width', viewport.width);
         textLayerDiv.setAttribute('data-viewport-height', viewport.height);
 
+        // --- FIX: Stop propagation of mouse/touch events on Text Layer ---
+        // This prevents StPageFlip from intercepting clicks on the text, allowing native text selection.
+        const stopProp = (e) => {
+            e.stopPropagation();
+        };
+
+        textLayerDiv.addEventListener('mousedown', stopProp);
+        textLayerDiv.addEventListener('touchstart', stopProp);
+        textLayerDiv.addEventListener('pointerdown', stopProp);
+        textLayerDiv.addEventListener('touchend', stopProp);
+        textLayerDiv.addEventListener('click', stopProp);
+
         pageDiv.appendChild(textLayerDiv);
 
         // Observe resize
