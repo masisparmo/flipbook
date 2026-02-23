@@ -253,6 +253,39 @@ async function renderTOC() {
     processItems(outline);
 }
 
+// --- Helper for Text Layer Scaling ---
+const resizeObserver = new ResizeObserver(entries => {
+    for (const entry of entries) {
+        updatePageScale(entry.target);
+    }
+});
+
+function updatePageScale(pageElement) {
+    const textLayer = pageElement.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const viewportWidth = parseFloat(textLayer.getAttribute('data-viewport-width'));
+    const viewportHeight = parseFloat(textLayer.getAttribute('data-viewport-height'));
+    if (!viewportWidth || !viewportHeight) return;
+
+    const clientWidth = pageElement.clientWidth;
+    const clientHeight = pageElement.clientHeight;
+
+    if (clientWidth === 0 || clientHeight === 0) return;
+
+    const scaleX = clientWidth / viewportWidth;
+    const scaleY = clientHeight / viewportHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    const imgWidth = viewportWidth * scale;
+    const imgHeight = viewportHeight * scale;
+
+    const offsetX = (clientWidth - imgWidth) / 2;
+    const offsetY = (clientHeight - imgHeight) / 2;
+
+    textLayer.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+}
+
 /**
  * Merender setiap halaman PDF ke dalam elemen Canvas
  */
@@ -285,6 +318,24 @@ async function renderPages() {
         canvas.style.objectFit = 'contain'; // Jaga aspek rasio
 
         pageDiv.appendChild(canvas);
+
+        // --- TEXT LAYER START ---
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.classList.add('textLayer');
+        // Set dimensions to match the viewport (PDF coordinates * scale)
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+        // Set scale factor for PDF.js Text Layer
+        textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
+        // Store for scaling
+        textLayerDiv.setAttribute('data-viewport-width', viewport.width);
+        textLayerDiv.setAttribute('data-viewport-height', viewport.height);
+
+        pageDiv.appendChild(textLayerDiv);
+
+        // Observe resize
+        resizeObserver.observe(pageDiv);
+
         flipbookEl.appendChild(pageDiv);
 
         // Render halaman PDF ke canvas context
@@ -295,6 +346,20 @@ async function renderPages() {
 
         // Tunggu render selesai sebelum lanjut ke halaman berikutnya (berurutan)
         await page.render(renderContext).promise;
+
+        // Render Text Layer (async but waited here to ensure order)
+        // Note: We could run this in parallel but let's keep it simple
+        try {
+            const textContent = await page.getTextContent();
+            pdfjsLib.renderTextLayer({
+                textContentSource: textContent,
+                container: textLayerDiv,
+                viewport: viewport,
+                textDivs: []
+            });
+        } catch (e) {
+            console.error(`Error rendering text layer for page ${i}:`, e);
+        }
     }
     console.log("Semua halaman selesai dirender ke Canvas.");
 }

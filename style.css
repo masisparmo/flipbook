@@ -157,6 +157,38 @@ body, html {
     background-color: white; /* Prevent transparency */
     /* box-shadow: 0 0 5px rgba(0,0,0,0.1); */ /* Optional: StPageFlip adds its own shadow, but this ensures a base */
     overflow: hidden;
+    position: relative;
+}
+
+/* Text Layer (PDF.js) */
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 1;
+    line-height: 1.0;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.textLayer span, .textLayer br {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+
+/* Selection Color */
+.textLayer ::selection {
+    color: transparent;
+    background: rgba(0, 0, 255, 0.2);
 }
 
 /* Modal Daftar Isi (TOC) */
