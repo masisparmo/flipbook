@@ -6,6 +6,7 @@ let pdfDoc = null;
 let pageFlip = null;
 let totalPages = 0;
 let currentPageNum = 1;
+let pendingSearchKeyword = null;
 let currentFile = {
     name: '',
     size: 0
@@ -351,12 +352,12 @@ async function renderPages() {
         // Note: We could run this in parallel but let's keep it simple
         try {
             const textContent = await page.getTextContent();
-            pdfjsLib.renderTextLayer({
+            await pdfjsLib.renderTextLayer({
                 textContentSource: textContent,
                 container: textLayerDiv,
                 viewport: viewport,
                 textDivs: []
-            });
+            }).promise;
         } catch (e) {
             console.error(`Error rendering text layer for page ${i}:`, e);
         }
@@ -427,6 +428,18 @@ function initFlipbook(width, height) {
 
         // Simpan posisi baca (bookmark)
         saveBookmark(newPageIndex);
+
+        // Handle pending search highlight
+        if (pendingSearchKeyword) {
+            setTimeout(() => {
+                if (window.find) {
+                    // Reset selection to ensure we find from the top of the visible page
+                    window.getSelection().removeAllRanges();
+                    window.find(pendingSearchKeyword);
+                }
+                pendingSearchKeyword = null;
+            }, 600); // Tunggu animasi flip selesai
+        }
     });
 
     // Cek apakah ada bookmark tersimpan
@@ -489,7 +502,18 @@ async function handleSearch() {
                 console.log(`Kata kunci "${keyword}" ditemukan di halaman ${pageNum}`);
 
                 if (pageFlip) {
-                    pageFlip.flip(pageNum - 1); // Flip ke halaman tersebut
+                    const targetIndex = pageNum - 1;
+                    if (pageFlip.getCurrentPageIndex() === targetIndex) {
+                        // Jika sudah di halaman tersebut, highlight langsung
+                        if (window.find) {
+                             window.getSelection().removeAllRanges();
+                             window.find(keyword);
+                        }
+                    } else {
+                        // Jika perlu flip, set pending keyword untuk dihandle event listener
+                        pendingSearchKeyword = keyword;
+                        pageFlip.flip(targetIndex);
+                    }
                 }
                 found = true;
                 break; // Berhenti mencari setelah ketemu yang pertama (Next)
