@@ -32,6 +32,13 @@ const totalPagesSpan = document.getElementById('total-pages');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
 
+// --- TTS Controls ---
+const ttsSpeakBtn = document.getElementById('tts-speak-btn');
+const ttsMediaControls = document.getElementById('tts-media-controls');
+const ttsPlayBtn = document.getElementById('tts-play-btn');
+const ttsPauseBtn = document.getElementById('tts-pause-btn');
+const ttsStopBtn = document.getElementById('tts-stop-btn');
+
 // --- Event Listeners ---
 
 // Upload & URL
@@ -81,6 +88,53 @@ tocModal.addEventListener('click', (e) => {
 searchBtn.addEventListener('click', handleSearch);
 searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSearch();
+});
+
+// --- TTS Event Listeners ---
+
+// Toggle TTS Mode
+ttsSpeakBtn.addEventListener('click', async () => {
+    // Jika sedang berbicara, kita stop dulu? Atau hanya toggle menu?
+    // Mari kita toggle menu dan auto-start play jika belum
+    const isHidden = ttsMediaControls.classList.contains('hidden');
+
+    if (isHidden) {
+        // Tampilkan kontrol
+        ttsMediaControls.classList.remove('hidden');
+        ttsSpeakBtn.style.color = '#007bff'; // Indikator aktif
+
+        // Auto start reading current page if not already speaking
+        if (!window.speechSynthesis.speaking) {
+            await TTSManager.speakCurrentPage();
+        }
+    } else {
+        // Sembunyikan kontrol
+        ttsMediaControls.classList.add('hidden');
+        ttsSpeakBtn.style.color = ''; // Reset warna
+
+        // Opsional: Stop berbicara saat menu ditutup?
+        // User request: "Stop" button exists. So maybe closing just hides controls.
+        // But for UX, usually closing the mode stops the action.
+        // Let's keep it running unless Stop is pressed, as user wanted separate controls.
+    }
+});
+
+ttsPlayBtn.addEventListener('click', async () => {
+    if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+    } else if (!window.speechSynthesis.speaking) {
+        await TTSManager.speakCurrentPage();
+    }
+});
+
+ttsPauseBtn.addEventListener('click', () => {
+    if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+    }
+});
+
+ttsStopBtn.addEventListener('click', () => {
+    window.speechSynthesis.cancel();
 });
 
 
@@ -605,3 +659,61 @@ async function handleSearch() {
         searchInput.focus();
     }
 }
+
+// --- Manajer Text-to-Speech (TTS) ---
+const TTSManager = {
+    async speakCurrentPage() {
+        if (!pdfDoc) return;
+
+        // Cancel previous speech
+        window.speechSynthesis.cancel();
+
+        try {
+            // Get current page number (1-based)
+            const pageNum = currentPageNum;
+            console.log(`TTS: Processing page ${pageNum}`);
+
+            const page = await pdfDoc.getPage(pageNum);
+            const textContent = await page.getTextContent();
+
+            // Join text items with space
+            let textToSpeak = textContent.items.map(item => item.str).join(' ');
+
+            if (!textToSpeak.trim()) {
+                alert("Tidak ada teks yang dapat dibaca pada halaman ini.");
+                return;
+            }
+
+            console.log("TTS Text:", textToSpeak.substring(0, 50) + "...");
+
+            // Create Utterance
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.lang = 'id-ID'; // Indonesian
+            utterance.rate = 1.0;
+
+            utterance.onstart = () => {
+                console.log("TTS Started");
+                ttsPlayBtn.textContent = '🔊';
+                ttsPlayBtn.style.color = '#28a745';
+            };
+
+            utterance.onend = () => {
+                console.log("TTS Finished");
+                ttsPlayBtn.textContent = '▶';
+                ttsPlayBtn.style.color = '';
+            };
+
+            utterance.onerror = (e) => {
+                console.error("TTS Error:", e);
+                ttsPlayBtn.textContent = '▶';
+                ttsPlayBtn.style.color = '';
+            };
+
+            window.speechSynthesis.speak(utterance);
+
+        } catch (error) {
+            console.error("TTS Failed:", error);
+            alert("Gagal membaca teks halaman.");
+        }
+    }
+};

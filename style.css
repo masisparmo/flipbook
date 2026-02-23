@@ -107,6 +107,24 @@ body, html {
     background-color: #444;
 }
 
+/* TTS Controls Styling */
+.tts-controls {
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+}
+
+#tts-media-controls {
+    display: inline-flex;
+    margin-left: 5px;
+}
+
+#tts-media-controls button {
+    padding: 5px 8px;
+    margin: 0 2px;
+    font-size: 0.9rem;
+}
+
 #page-info {
     font-size: 0.9rem;
     display: flex;
