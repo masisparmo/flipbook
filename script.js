@@ -662,6 +662,38 @@ async function handleSearch() {
 
 // --- Manajer Text-to-Speech (TTS) ---
 const TTSManager = {
+    /**
+     * Mendapatkan suara laki-laki bahasa Indonesia jika tersedia.
+     * Prioritas: Nama mengandung "Male", "Pria", "Laki", "Ardi", "Andika", "David".
+     * Fallback: Suara Indonesia apa saja.
+     */
+    getIndonesianMaleVoice() {
+        const voices = window.speechSynthesis.getVoices();
+
+        // Filter suara bahasa Indonesia (id-ID atau id)
+        const indonesianVoices = voices.filter(voice => voice.lang.includes('id'));
+
+        if (indonesianVoices.length === 0) {
+            console.warn("TTS: Tidak ditemukan suara Bahasa Indonesia.");
+            return null;
+        }
+
+        // Cari suara laki-laki
+        const maleKeywords = ['male', 'pria', 'cowok', 'laki', 'ardi', 'andika', 'david'];
+        const maleVoice = indonesianVoices.find(voice => {
+            const name = voice.name.toLowerCase();
+            return maleKeywords.some(keyword => name.includes(keyword));
+        });
+
+        if (maleVoice) {
+            console.log(`TTS: Menggunakan suara laki-laki: ${maleVoice.name}`);
+            return maleVoice;
+        }
+
+        console.log(`TTS: Suara laki-laki spesifik tidak ditemukan. Menggunakan fallback: ${indonesianVoices[0].name}`);
+        return indonesianVoices[0];
+    },
+
     async speakCurrentPage() {
         if (!pdfDoc) return;
 
@@ -691,6 +723,12 @@ const TTSManager = {
             utterance.lang = 'id-ID'; // Indonesian
             utterance.rate = 1.0;
 
+            // Set Voice (Male preference)
+            const preferredVoice = this.getIndonesianMaleVoice();
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+            }
+
             utterance.onstart = () => {
                 console.log("TTS Started");
                 ttsPlayBtn.textContent = '🔊';
@@ -717,3 +755,12 @@ const TTSManager = {
         }
     }
 };
+
+// --- Inisialisasi Suara TTS ---
+// Memastikan daftar suara termuat (khususnya untuk browser seperti Chrome)
+if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => {
+        // Trigger getVoices untuk mempopulate cache browser
+        window.speechSynthesis.getVoices();
+    };
+}
