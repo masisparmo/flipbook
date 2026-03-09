@@ -39,6 +39,17 @@
             <button id="prev-btn" title="Halaman Sebelumnya">◀</button>
             <span id="page-info">Halaman <input type="number" id="page-input" min="1" value="1"> / <span id="total-pages">0</span></span>
             <button id="next-btn" title="Halaman Selanjutnya">▶</button>
+
+            <!-- TTS Controls -->
+            <div class="tts-controls">
+                <button id="tts-speak-btn" title="Baca Halaman Ini">🔊</button>
+                <div id="tts-media-controls" class="hidden" style="display:inline-flex;">
+                    <button id="tts-play-btn" title="Putar">▶</button>
+                    <button id="tts-pause-btn" title="Jeda">⏸</button>
+                    <button id="tts-stop-btn" title="Berhenti">⏹</button>
+                </div>
+            </div>
+
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="Cari kata...">
                 <button id="search-btn">🔍</button>

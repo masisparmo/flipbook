@@ -6,6 +6,7 @@ let pdfDoc = null;
 let pageFlip = null;
 let totalPages = 0;
 let currentPageNum = 1;
+let pendingSearchKeyword = null;
 let currentFile = {
     name: '',
     size: 0
@@ -30,6 +31,13 @@ const pageInput = document.getElementById('page-input');
 const totalPagesSpan = document.getElementById('total-pages');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
+
+// --- TTS Controls ---
+const ttsSpeakBtn = document.getElementById('tts-speak-btn');
+const ttsMediaControls = document.getElementById('tts-media-controls');
+const ttsPlayBtn = document.getElementById('tts-play-btn');
+const ttsPauseBtn = document.getElementById('tts-pause-btn');
+const ttsStopBtn = document.getElementById('tts-stop-btn');
 
 // --- Event Listeners ---
 
@@ -80,6 +88,53 @@ tocModal.addEventListener('click', (e) => {
 searchBtn.addEventListener('click', handleSearch);
 searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleSearch();
+});
+
+// --- TTS Event Listeners ---
+
+// Toggle TTS Mode
+ttsSpeakBtn.addEventListener('click', async () => {
+    // Jika sedang berbicara, kita stop dulu? Atau hanya toggle menu?
+    // Mari kita toggle menu dan auto-start play jika belum
+    const isHidden = ttsMediaControls.classList.contains('hidden');
+
+    if (isHidden) {
+        // Tampilkan kontrol
+        ttsMediaControls.classList.remove('hidden');
+        ttsSpeakBtn.style.color = '#007bff'; // Indikator aktif
+
+        // Auto start reading current page if not already speaking
+        if (!window.speechSynthesis.speaking) {
+            await TTSManager.speakCurrentPage();
+        }
+    } else {
+        // Sembunyikan kontrol
+        ttsMediaControls.classList.add('hidden');
+        ttsSpeakBtn.style.color = ''; // Reset warna
+
+        // Opsional: Stop berbicara saat menu ditutup?
+        // User request: "Stop" button exists. So maybe closing just hides controls.
+        // But for UX, usually closing the mode stops the action.
+        // Let's keep it running unless Stop is pressed, as user wanted separate controls.
+    }
+});
+
+ttsPlayBtn.addEventListener('click', async () => {
+    if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+    } else if (!window.speechSynthesis.speaking) {
+        await TTSManager.speakCurrentPage();
+    }
+});
+
+ttsPauseBtn.addEventListener('click', () => {
+    if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+    }
+});
+
+ttsStopBtn.addEventListener('click', () => {
+    window.speechSynthesis.cancel();
 });
 
 
@@ -253,6 +308,40 @@ async function renderTOC() {
     processItems(outline);
 }
 
+// --- Helper for Text Layer Scaling ---
+const resizeObserver = new ResizeObserver(entries => {
+    for (const entry of entries) {
+        updatePageScale(entry.target);
+    }
+});
+
+function updatePageScale(pageElement) {
+    const textLayer = pageElement.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const viewportWidth = parseFloat(textLayer.getAttribute('data-viewport-width'));
+    const viewportHeight = parseFloat(textLayer.getAttribute('data-viewport-height'));
+    if (!viewportWidth || !viewportHeight) return;
+
+    const clientWidth = pageElement.clientWidth;
+    const clientHeight = pageElement.clientHeight;
+
+    if (clientWidth === 0 || clientHeight === 0) return;
+
+    // Use containment logic (similar to object-fit: contain)
+    const scaleX = clientWidth / viewportWidth;
+    const scaleY = clientHeight / viewportHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    const imgWidth = viewportWidth * scale;
+    const imgHeight = viewportHeight * scale;
+
+    const offsetX = (clientWidth - imgWidth) / 2;
+    const offsetY = (clientHeight - imgHeight) / 2;
+
+    textLayer.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+}
+
 /**
  * Merender setiap halaman PDF ke dalam elemen Canvas
  */
@@ -266,6 +355,7 @@ async function renderPages() {
         // Buat container div untuk halaman (diperlukan oleh StPageFlip)
         const pageDiv = document.createElement('div');
         pageDiv.classList.add('page');
+        pageDiv.setAttribute('data-page-index', i - 1); // Store 0-based index
         // pageDiv.style.backgroundColor = 'white'; // Ditangani di CSS
 
         // Buat elemen Canvas
@@ -285,6 +375,36 @@ async function renderPages() {
         canvas.style.objectFit = 'contain'; // Jaga aspek rasio
 
         pageDiv.appendChild(canvas);
+
+        // --- TEXT LAYER START ---
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.classList.add('textLayer');
+        // Set dimensions to match the viewport (PDF coordinates * scale)
+        textLayerDiv.style.width = `${viewport.width}px`;
+        textLayerDiv.style.height = `${viewport.height}px`;
+        // Set scale factor for PDF.js Text Layer
+        textLayerDiv.style.setProperty('--scale-factor', viewport.scale);
+        // Store for scaling
+        textLayerDiv.setAttribute('data-viewport-width', viewport.width);
+        textLayerDiv.setAttribute('data-viewport-height', viewport.height);
+
+        // --- FIX: Stop propagation of mouse/touch events on Text Layer ---
+        // This prevents StPageFlip from intercepting clicks on the text, allowing native text selection.
+        const stopProp = (e) => {
+            e.stopPropagation();
+        };
+
+        textLayerDiv.addEventListener('mousedown', stopProp);
+        textLayerDiv.addEventListener('touchstart', stopProp);
+        textLayerDiv.addEventListener('pointerdown', stopProp);
+        textLayerDiv.addEventListener('touchend', stopProp);
+        textLayerDiv.addEventListener('click', stopProp);
+
+        pageDiv.appendChild(textLayerDiv);
+
+        // Observe resize
+        resizeObserver.observe(pageDiv);
+
         flipbookEl.appendChild(pageDiv);
 
         // Render halaman PDF ke canvas context
@@ -295,6 +415,19 @@ async function renderPages() {
 
         // Tunggu render selesai sebelum lanjut ke halaman berikutnya (berurutan)
         await page.render(renderContext).promise;
+
+        // Render Text Layer (async but waited here to ensure order)
+        try {
+            const textContent = await page.getTextContent();
+            await pdfjsLib.renderTextLayer({
+                textContentSource: textContent,
+                container: textLayerDiv,
+                viewport: viewport,
+                textDivs: []
+            }).promise;
+        } catch (e) {
+            console.error(`Error rendering text layer for page ${i}:`, e);
+        }
     }
     console.log("Semua halaman selesai dirender ke Canvas.");
 }
@@ -362,6 +495,15 @@ function initFlipbook(width, height) {
 
         // Simpan posisi baca (bookmark)
         saveBookmark(newPageIndex);
+
+        // Handle pending search highlight
+        if (pendingSearchKeyword) {
+            // Apply highlight after a delay to ensure page is visible
+            setTimeout(() => {
+                performSearchHighlight(pendingSearchKeyword, newPageIndex);
+                pendingSearchKeyword = null;
+            }, 500); // Tunggu animasi flip selesai
+        }
     });
 
     // Cek apakah ada bookmark tersimpan
@@ -379,6 +521,64 @@ function initFlipbook(width, height) {
 
 // --- Fitur Pencarian ---
 
+function clearHighlights() {
+    const highlights = document.querySelectorAll('.textLayer .highlighted');
+    highlights.forEach(el => el.classList.remove('highlighted'));
+}
+
+/**
+ * Highlights text on a specific page
+ * @param {string} keyword
+ * @param {number} pageIndex 0-based index
+ */
+function performSearchHighlight(keyword, pageIndex) {
+    if (!keyword) return;
+
+    // Find the page element
+    // StPageFlip might move elements, so we look for our marker attribute
+    const pages = document.querySelectorAll('.page');
+    let targetPage = null;
+    for (const p of pages) {
+        if (parseInt(p.getAttribute('data-page-index')) === pageIndex) {
+            targetPage = p;
+            break;
+        }
+    }
+
+    if (!targetPage) return;
+
+    const textLayer = targetPage.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const spans = textLayer.querySelectorAll('span');
+    let foundInSpans = false;
+
+    // Remove old highlights on this page
+    spans.forEach(span => span.classList.remove('highlighted'));
+
+    // Simple span-based matching
+    spans.forEach(span => {
+        if (span.textContent.toLowerCase().includes(keyword)) {
+            span.classList.add('highlighted');
+            foundInSpans = true;
+        }
+    });
+
+    // Fallback: Browser native find/select
+    // This is useful for "Find Next" functionality or if spans are fragmented
+    if (window.find) {
+        // We try to focus the window and find
+        // Note: window.find is global, so it might jump. But we just flipped to the page.
+        try {
+            window.getSelection().removeAllRanges();
+            window.find(keyword, false, false, true, false, true, false);
+        } catch (e) {
+            console.log("Window find failed", e);
+        }
+    }
+}
+
+
 /**
  * Mencari teks di seluruh halaman PDF
  */
@@ -387,6 +587,9 @@ async function handleSearch() {
     if (!keywordRaw) return;
 
     const keyword = keywordRaw.toLowerCase();
+
+    // Clear previous visual highlights globally
+    clearHighlights();
 
     // Tampilkan indikator loading
     const originalBtnText = searchBtn.textContent;
@@ -412,19 +615,29 @@ async function handleSearch() {
             const textContent = await page.getTextContent();
 
             // Strategi Ekstraksi Teks:
-            // 1. Gabung dengan spasi (normal)
-            // 2. Gabung tanpa spasi (untuk mengatasi fragmentasi kata di PDF)
             const items = textContent.items.map(item => item.str);
             const textSpaced = items.join(' ').toLowerCase();
             const textJoined = items.join('').toLowerCase();
 
-            // Cek apakah keyword ada di salah satu versi
+            // Cek apakah keyword ada
             if (textSpaced.includes(keyword) || textJoined.includes(keyword)) {
                 // Ketemu!
                 console.log(`Kata kunci "${keyword}" ditemukan di halaman ${pageNum}`);
 
                 if (pageFlip) {
-                    pageFlip.flip(pageNum - 1); // Flip ke halaman tersebut
+                    const targetIndex = pageNum - 1;
+
+                    // Set pending keyword so event listener handles the highlight after animation
+                    pendingSearchKeyword = keyword;
+
+                    if (pageFlip.getCurrentPageIndex() === targetIndex) {
+                        // Jika sudah di halaman tersebut, trigger manual
+                        performSearchHighlight(keyword, targetIndex);
+                        pendingSearchKeyword = null; // Clear because we handled it
+                    } else {
+                        // Flip and let event listener handle it
+                        pageFlip.flip(targetIndex);
+                    }
                 }
                 found = true;
                 break; // Berhenti mencari setelah ketemu yang pertama (Next)
@@ -442,7 +655,65 @@ async function handleSearch() {
         // Kembalikan tombol ke keadaan semula
         searchBtn.textContent = originalBtnText;
         searchBtn.disabled = false;
-        // Fokus kembali ke input agar bisa tekan Enter lagi untuk 'Find Next'
+        // Fokus kembali ke input
         searchInput.focus();
     }
 }
+
+// --- Manajer Text-to-Speech (TTS) ---
+const TTSManager = {
+    async speakCurrentPage() {
+        if (!pdfDoc) return;
+
+        // Cancel previous speech
+        window.speechSynthesis.cancel();
+
+        try {
+            // Get current page number (1-based)
+            const pageNum = currentPageNum;
+            console.log(`TTS: Processing page ${pageNum}`);
+
+            const page = await pdfDoc.getPage(pageNum);
+            const textContent = await page.getTextContent();
+
+            // Join text items with space
+            let textToSpeak = textContent.items.map(item => item.str).join(' ');
+
+            if (!textToSpeak.trim()) {
+                alert("Tidak ada teks yang dapat dibaca pada halaman ini.");
+                return;
+            }
+
+            console.log("TTS Text:", textToSpeak.substring(0, 50) + "...");
+
+            // Create Utterance
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.lang = 'id-ID'; // Indonesian
+            utterance.rate = 1.0;
+
+            utterance.onstart = () => {
+                console.log("TTS Started");
+                ttsPlayBtn.textContent = '🔊';
+                ttsPlayBtn.style.color = '#28a745';
+            };
+
+            utterance.onend = () => {
+                console.log("TTS Finished");
+                ttsPlayBtn.textContent = '▶';
+                ttsPlayBtn.style.color = '';
+            };
+
+            utterance.onerror = (e) => {
+                console.error("TTS Error:", e);
+                ttsPlayBtn.textContent = '▶';
+                ttsPlayBtn.style.color = '';
+            };
+
+            window.speechSynthesis.speak(utterance);
+
+        } catch (error) {
+            console.error("TTS Failed:", error);
+            alert("Gagal membaca teks halaman.");
+        }
+    }
+};

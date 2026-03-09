@@ -107,6 +107,24 @@ body, html {
     background-color: #444;
 }
 
+/* TTS Controls Styling */
+.tts-controls {
+    display: flex;
+    align-items: center;
+    margin: 0 10px;
+}
+
+#tts-media-controls {
+    display: inline-flex;
+    margin-left: 5px;
+}
+
+#tts-media-controls button {
+    padding: 5px 8px;
+    margin: 0 2px;
+    font-size: 0.9rem;
+}
+
 #page-info {
     font-size: 0.9rem;
     display: flex;
@@ -157,6 +175,44 @@ body, html {
     background-color: white; /* Prevent transparency */
     /* box-shadow: 0 0 5px rgba(0,0,0,0.1); */ /* Optional: StPageFlip adds its own shadow, but this ensures a base */
     overflow: hidden;
+    position: relative;
+}
+
+/* Text Layer (PDF.js) */
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 1;
+    line-height: 1.0;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    z-index: 10; /* Ensure it's above canvas */
+    pointer-events: auto;
+}
+
+.textLayer span, .textLayer br {
+    color: rgba(0, 0, 0, 0.005); /* Barely visible to ensure selection works */
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+
+/* Highlighted Text (Search Result) */
+.textLayer span.highlighted {
+    background-color: rgba(255, 255, 0, 0.4);
+    border-radius: 2px;
+}
+
+/* Selection Color */
+.textLayer ::selection {
+    color: transparent;
+    background: rgba(0, 0, 255, 0.2);
 }
 
 /* Modal Daftar Isi (TOC) */
