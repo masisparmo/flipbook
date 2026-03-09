@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart PDF Flipbook Viewer - Fase 1</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- StPageFlip CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/page-flip/dist/js/page-flip.browser.js"></script>
+</head>
+<body>
+
+    <!-- Container Upload (Tampilan Awal) -->
+    <div id="upload-container" class="upload-container">
+        <div class="upload-box">
+            <h1>Smart PDF Flipbook Viewer</h1>
+            <p>Unggah file PDF lokal atau masukkan URL (Fase 2)</p>
+
+            <div class="input-group">
+                <label for="file-input" class="btn-upload">Pilih File PDF</label>
+                <input type="file" id="file-input" accept="application/pdf" hidden>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="url-input" placeholder="Masukkan URL PDF...">
+                <button id="url-btn" class="btn-url">Muat URL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container Viewer (Tampilan Flipbook) - Tersembunyi Awalnya -->
+    <div id="viewer-container" class="viewer-container hidden">
+
+        <!-- Toolbar Navigasi -->
+        <div class="toolbar">
+            <button id="toc-toggle-btn" title="Daftar Isi">☰</button>
+            <button id="prev-btn" title="Halaman Sebelumnya">◀</button>
+            <span id="page-info">Halaman <input type="number" id="page-input" min="1" value="1"> / <span id="total-pages">0</span></span>
+            <button id="next-btn" title="Halaman Selanjutnya">▶</button>
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Cari kata...">
+                <button id="search-btn">🔍</button>
+            </div>
+        </div>
+
+        <!-- Area Flipbook -->
+        <div id="flipbook" class="flipbook">
+            <!-- Halaman Canvas akan dirender di sini oleh JavaScript -->
+        </div>
+
+        <!-- Modal Daftar Isi (TOC) -->
+        <div id="toc-modal" class="toc-modal hidden">
+            <div class="toc-content">
+                <span class="close-toc">&times;</span>
+                <h2>Daftar Isi</h2>
+                <ul id="toc-list">
+                    <!-- Item TOC akan ditambahkan di sini -->
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
